@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Note Identifier</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #fff;
+    font-family: 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  canvas#viz {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    opacity: 0.18;
+    pointer-events: none;
+  }
+  .container {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    width: 100%;
+    max-width: 480px;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 1rem;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: #4af;
+    opacity: 0.8;
+  }
+  .note-display {
+    position: relative;
+    width: 200px; height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 2px solid #1a3a5c;
+    background: radial-gradient(circle at 50% 50%, #0d1f33, #080810);
+    box-shadow: 0 0 40px #0af2, 0 0 80px #0af1;
+    transition: box-shadow 0.2s;
+  }
+  .note-display.active {
+    box-shadow: 0 0 60px #0af4, 0 0 120px #0af2, inset 0 0 30px #0af1;
+    border-color: #0af;
+  }
+  .note-name {
+    font-size: 5rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #fff;
+    letter-spacing: -2px;
+    transition: color 0.2s;
+  }
+  .note-display.active .note-name { color: #4df; }
+  .octave {
+    font-size: 1.4rem;
+    color: #4af;
+    opacity: 0.7;
+    margin-top: 4px;
+  }
+  .freq {
+    font-size: 0.85rem;
+    color: #4af;
+    opacity: 0.6;
+    letter-spacing: 0.1em;
+  }
+  /* Tuner bar */
+  .tuner-wrap {
+    width: 100%;
+  }
+  .tuner-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: #4af8;
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+  }
+  .tuner-track {
+    position: relative;
+    width: 100%;
+    height: 8px;
+    background: #111a2a;
+    border-radius: 4px;
+    overflow: visible;
+  }
+  .tuner-center {
+    position: absolute;
+    left: 50%;
+    top: -4px;
+    width: 2px;
+    height: 16px;
+    background: #4af;
+    transform: translateX(-50%);
+    border-radius: 1px;
+  }
+  .tuner-fill {
+    position: absolute;
+    top: 0; height: 8px;
+    border-radius: 4px;
+    transition: all 0.1s;
+    background: #0af;
+  }
+  .tuner-needle {
+    position: absolute;
+    top: 50%;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #0af;
+    transform: translate(-50%, -50%);
+    transition: left 0.1s;
+    box-shadow: 0 0 8px #0af;
+  }
+  .cents-val {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #4af8;
+    margin-top: 8px;
+    letter-spacing: 0.1em;
+  }
+  /* Mic button */
+  #btn {
+    padding: 12px 36px;
+    border-radius: 30px;
+    border: 1.5px solid #0af;
+    background: transparent;
+    color: #4df;
+    font-size: 0.9rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  #btn:hover { background: #0af2; box-shadow: 0 0 20px #0af3; }
+  #btn.listening {
+    background: #0af2;
+    box-shadow: 0 0 20px #0af4;
+    border-color: #4df;
+    color: #fff;
+  }
+  .status {
+    font-size: 0.75rem;
+    color: #4af6;
+    letter-spacing: 0.12em;
+    min-height: 1em;
+  }
+  /* note history */
+  .history-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #4af5;
+    align-self: flex-start;
+  }
+  .history {
+    display: flex;
+    gap: 8px;
+    align-self: flex-start;
+    flex-wrap: wrap;
+  }
+  .history span {
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #0d1f33;
+    border: 1px solid #1a3a5c;
+    font-size: 0.8rem;
+    color: #4af;
+    opacity: 0.7;
+  }
+</style>
+</head>
+<body>
+<canvas id="viz"></canvas>
+<div class="container">
+  <h1>🎵 Note Identifier</h1>
+  <div class="note-display" id="noteDisplay">
+    <div class="note-name" id="noteName">—</div>
+    <div class="octave" id="octave"></div>
+    <div class="freq" id="freq"></div>
+  </div>
+
+  <div class="tuner-wrap">
+    <div class="tuner-label"><span>♭ Flat</span><span>In Tune</span><span>Sharp ♯</span></div>
+    <div class="tuner-track" id="tunerTrack">
+      <div class="tuner-fill" id="tunerFill" style="width:0;left:50%"></div>
+      <div class="tuner-center"></div>
+      <div class="tuner-needle" id="needle" style="left:50%"></div>
+    </div>
+    <div class="cents-val" id="centsVal">— cents</div>
+  </div>
+
+  <button id="btn">Start Listening</button>
+  <div class="status" id="status">Press the button to activate microphone</div>
+
+  <div class="history-label">Recent Notes</div>
+  <div class="history" id="history"></div>
+</div>
+
+<script>
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+let audioCtx, analyser, micStream, animId;
+let listening = false;
+let lastNote = '', noteHistory = [], silenceTimer = null;
+
+const btn = document.getElementById('btn');
+const noteDisplay = document.getElementById('noteDisplay');
+const noteNameEl = document.getElementById('noteName');
+const octaveEl = document.getElementById('octave');
+const freqEl = document.getElementById('freq');
+const needle = document.getElementById('needle');
+const tunerFill = document.getElementById('tunerFill');
+const centsVal = document.getElementById('centsVal');
+const statusEl = document.getElementById('status');
+const historyEl = document.getElementById('history');
+const canvas = document.getElementById('viz');
+const ctx2d = canvas.getContext('2d');
+
+function freqToNote(freq) {
+  const A4 = 440, A4_MIDI = 69;
+  const midi = Math.round(12 * Math.log2(freq / A4) + A4_MIDI);
+  const name = NOTE_NAMES[midi % 12];
+  const octave = Math.floor(midi / 12) - 1;
+  const idealFreq = A4 * Math.pow(2, (midi - A4_MIDI) / 12);
+  const cents = Math.round(1200 * Math.log2(freq / idealFreq));
+  return { name, octave, cents, midi };
+}
+
+// Autocorrelation pitch detection
+function autoCorrelate(buf, sampleRate) {
+  const SIZE = buf.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.01) return -1;
+
+  let r1 = 0, r2 = SIZE - 1;
+  const thres = 0.2;
+  for (let i = 0; i < SIZE / 2; i++) { if (Math.abs(buf[i]) < thres) { r1 = i; break; } }
+  for (let i = 1; i < SIZE / 2; i++) { if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; } }
+  const buf2 = buf.slice(r1, r2);
+  const c = new Float32Array(buf2.length).fill(0);
+  for (let i = 0; i < buf2.length; i++)
+    for (let j = 0; j < buf2.length - i; j++)
+      c[i] += buf2[j] * buf2[j + i];
+
+  let d = 0;
+  while (c[d] > c[d + 1]) d++;
+  let maxVal = -1, maxPos = -1;
+  for (let i = d; i < buf2.length; i++) {
+    if (c[i] > maxVal) { maxVal = c[i]; maxPos = i; }
+  }
+  let T0 = maxPos;
+  const x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
+  const a = (x1 + x3 - 2 * x2) / 2;
+  const b = (x3 - x1) / 2;
+  if (a) T0 -= b / (2 * a);
+  return sampleRate / T0;
+}
+
+function updateTuner(cents) {
+  const pct = Math.max(-50, Math.min(50, cents));
+  const pos = 50 + pct; // 0–100%
+  needle.style.left = pos + '%';
+  const mid = 50;
+  if (pct >= 0) {
+    tunerFill.style.left = mid + '%';
+    tunerFill.style.width = (pos - mid) + '%';
+  } else {
+    tunerFill.style.left = pos + '%';
+    tunerFill.style.width = (mid - pos) + '%';
+  }
+  const abs = Math.abs(pct);
+  const hue = abs < 10 ? '#0f8' : abs < 25 ? '#fa0' : '#f44';
+  tunerFill.style.background = hue;
+  needle.style.borderColor = hue;
+  needle.style.boxShadow = `0 0 8px ${hue}`;
+  centsVal.textContent = (pct >= 0 ? '+' : '') + Math.round(pct) + ' cents';
+}
+
+function addHistory(note) {
+  if (noteHistory[noteHistory.length - 1] === note) return;
+  noteHistory.push(note);
+  if (noteHistory.length > 7) noteHistory.shift();
+  historyEl.innerHTML = noteHistory.map(n => `<span>${n}</span>`).join('');
+}
+
+// Waveform visualizer
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+let waveData = new Uint8Array(256);
+function drawViz() {
+  if (!analyser) return;
+  analyser.getByteTimeDomainData(waveData);
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  ctx2d.strokeStyle = '#0af';
+  ctx2d.lineWidth = 1.5;
+  ctx2d.beginPath();
+  const sliceW = canvas.width / waveData.length;
+  let x = 0;
+  for (let i = 0; i < waveData.length; i++) {
+    const v = waveData[i] / 128;
+    const y = (v * canvas.height) / 2;
+    i === 0 ? ctx2d.moveTo(x, y) : ctx2d.lineTo(x, y);
+    x += sliceW;
+  }
+  ctx2d.stroke();
+}
+
+let buf = new Float32Array(2048);
+function detect() {
+  if (!listening) return;
+  drawViz();
+  analyser.getFloatTimeDomainData(buf);
+  const freq = autoCorrelate(buf, audioCtx.sampleRate);
+
+  if (freq > 60 && freq < 5000) {
+    const { name, octave, cents } = freqToNote(freq);
+    const full = name + octave;
+    noteNameEl.textContent = name;
+    octaveEl.textContent = 'Octave ' + octave;
+    freqEl.textContent = freq.toFixed(1) + ' Hz';
+    noteDisplay.classList.add('active');
+    updateTuner(cents);
+    if (full !== lastNote) { addHistory(full); lastNote = full; }
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(() => {
+      noteNameEl.textContent = '—';
+      octaveEl.textContent = '';
+      freqEl.textContent = '';
+      noteDisplay.classList.remove('active');
+      needle.style.left = '50%';
+      tunerFill.style.width = '0';
+      centsVal.textContent = '— cents';
+      lastNote = '';
+    }, 300);
+  }
+  animId = requestAnimationFrame(detect);
+}
+
+async function startListening() {
+  statusEl.textContent = 'Requesting microphone access...';
+
+  // Check if getUserMedia is available at all
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    statusEl.textContent = '❌ Your browser does not support microphone access. Try Chrome or Firefox.';
+    return;
+  }
+
+  // Check permission state if Permissions API is available
+  if (navigator.permissions) {
+    try {
+      const perm = await navigator.permissions.query({ name: 'microphone' });
+      statusEl.textContent = 'Mic permission state: ' + perm.state + '. Requesting stream...';
+    } catch(_) {}
+  }
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      },
+      video: false
+    });
+
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      statusEl.textContent = '❌ Web Audio API not supported in this browser.';
+      return;
+    }
+    audioCtx = new AudioCtx();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    waveData = new Uint8Array(analyser.fftSize);
+    buf = new Float32Array(analyser.fftSize);
+    const src = audioCtx.createMediaStreamSource(micStream);
+    src.connect(analyser);
+    listening = true;
+    btn.textContent = 'Stop Listening';
+    btn.classList.add('listening');
+    statusEl.textContent = 'Listening… play or sing a note!';
+    detect();
+  } catch (e) {
+    console.error('Mic error:', e.name, e.message);
+    const msgs = {
+      NotAllowedError: '❌ Permission denied. In Chrome: click 🔒 in address bar → Microphone → Allow → reload.',
+      PermissionDeniedError: '❌ Permission denied. Check browser + OS mic settings.',
+      NotFoundError: '❌ No microphone detected. Plug one in and retry.',
+      NotReadableError: '❌ Mic is being used by another app. Close Zoom/Teams/etc. and retry.',
+      OverconstrainedError: '❌ Mic constraints failed. Retrying with basic settings...',
+      SecurityError: '❌ Security block. Make sure the page is served over HTTPS.',
+      AbortError: '❌ Mic request aborted. Try again.',
+    };
+    if (e.name === 'OverconstrainedError') {
+      // Retry with minimal constraints
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        waveData = new Uint8Array(analyser.fftSize);
+        buf = new Float32Array(analyser.fftSize);
+        const src = audioCtx.createMediaStreamSource(micStream);
+        src.connect(analyser);
+        listening = true;
+        btn.textContent = 'Stop Listening';
+        btn.classList.add('listening');
+        statusEl.textContent = 'Listening… play or sing a note!';
+        detect();
+        return;
+      } catch(e2) {
+        statusEl.textContent = '❌ Retry failed: ' + e2.name;
+        return;
+      }
+    }
+    statusEl.textContent = msgs[e.name] || ('❌ Error: ' + e.name + ' — ' + e.message);
+  }
+}
+
+function stopListening() {
+  listening = false;
+  cancelAnimationFrame(animId);
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (audioCtx) audioCtx.close();
+  noteNameEl.textContent = '—';
+  octaveEl.textContent = '';
+  freqEl.textContent = '';
+  noteDisplay.classList.remove('active');
+  needle.style.left = '50%';
+  tunerFill.style.width = '0';
+  centsVal.textContent = '— cents';
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  btn.textContent = 'Start Listening';
+  btn.classList.remove('listening');
+  statusEl.textContent = 'Press the button to activate microphone';
+  lastNote = '';
+}
+
+btn.addEventListener('click', () => listening ? stopListening() : startListening());
+</script>
+</body>
+</html>
